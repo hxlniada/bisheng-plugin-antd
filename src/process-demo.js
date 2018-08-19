@@ -90,28 +90,47 @@ module.exports = ({ markdownData, isBuild, noPreview, babelConfig, pxtorem }) =>
     markdownData.content = contentChildren.slice(0, introEnd);
   }
 
-  const sourceCodeObject = getSourceCodeObject(contentChildren, codeIndex);
-  if (sourceCodeObject.isES6) {
-    markdownData.highlightedCode = contentChildren[codeIndex].slice(0, 2);
+  var sourceCodeObject = getSourceCodeObject(contentChildren, codeIndex);
+  function escapeWinPath(path) {
+    return path.replace(/\\/g, '\\\\');
+  }
+
+  const filePath = path.join(process.cwd(), meta.filename.replace(/\.md$/, '.vue'));
+
+  if (fs.existsSync(filePath)) {
+    const fileContent = fs.readFileSync(filePath).toString();
+    const language = Prism.languages['jsx'] || Prism.languages.autoit;
+    markdownData.highlightedCode = Prism.highlight(fileContent, language);
     if (!noPreview) {
       markdownData.preview = {
         __BISHENG_EMBEDED_CODE: true,
-        code: transformer(sourceCodeObject.code, babelConfig),
+        // code: loadCode.toString()
+        code: '' + ('function () {\n' + '  return new Promise(function (resolve) {\n') + '    require.ensure([], function (require) {\n' + '      resolve(require(\'' + escapeWinPath(filePath) + '\'));\n' + '    });\n' + '  });\n' + '}'
       };
     }
-  } else {
-    // TODO: use loader's `this.dependencies` to watch
-    const requireString = `require('!!babel!${watchLoader}!${getCorrespondingTSX(meta.filename)}')`;
-    markdownData.highlightedCode = {
-      __BISHENG_EMBEDED_CODE: true,
-      code: `${requireString}.highlightedCode`,
-    };
-    markdownData.preview = {
-      __BISHENG_EMBEDED_CODE: true,
-      code: `${requireString}.preview`,
-    };
   }
-
+  else {
+    if (sourceCodeObject.isES6) {
+      markdownData.highlightedCode = contentChildren[codeIndex].slice(0, 2);
+      if (!noPreview) {
+        markdownData.preview = {
+          __BISHENG_EMBEDED_CODE: true,
+          code: transformer(sourceCodeObject.code, babelConfig)
+        };
+      }
+    } else {
+      // TODO: use loader's `this.dependencies` to watch
+      const requireString = `require('!!babel!${watchLoader}!${getCorrespondingTSX(meta.filename)}')`;
+      markdownData.highlightedCode = {
+        __BISHENG_EMBEDED_CODE: true,
+        code: `${requireString}.highlightedCode`,
+      };
+      markdownData.preview = {
+        __BISHENG_EMBEDED_CODE: true,
+        code: `${requireString}.preview`,
+      };
+    }
+  }
   // Add style node to markdown data.
   const styleNode = getStyleNode(contentChildren);
   if (isStyleTag(styleNode)) {
